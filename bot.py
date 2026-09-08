@@ -196,7 +196,7 @@ async def start_handler(client, message):
     name = user.first_name or "User"
     welcome = (
         f"👋 <b>Welcome {name}!</b>\n\n"
-        "🎬 <b>MISSTU Video Downloader</b>\n\n"
+        "🎬 <b>Alexa Video Downloader</b>\n\n"
         "📥 Mujhe kisi supported video ka link bhejo.\n"
         "Main uska video download karke yahin bhej dunga.\n\n"
         "⚡ <b>Fast • Simple • Easy</b>"
@@ -338,7 +338,7 @@ async def video_handler(client, message):
                 await client.send_video(
                     chat_id=message.chat.id,
                     video=str(output_file),
-                    caption="🎬 <b>Video Downloaded Successfully!</b>\n\n⚡ <b>MISSTU Downloader</b>",
+                    caption="🎬 <b>Video Downloaded Successfully!</b>\n\n⚡ <b>Alexa Downloader</b>",
                     supports_streaming=True,
                 )
                 uploaded = True
