@@ -1,0 +1,4 @@
+pyrogram>=2.0.106,<3.0
+tgcrypto>=1.2.5
+requests>=2.31.0
+Flask>=3.0.0
