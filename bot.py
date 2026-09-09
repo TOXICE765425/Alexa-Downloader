@@ -721,7 +721,7 @@ async def start_handler(
 
     welcome = (
         f"👋 <b>Welcome {name}!</b>\n\n"
-        "🎬 <b>MISSTU Video Downloader</b>\n\n"
+        "🎬 <b>Alexa Video Downloader</b>\n\n"
         "📥 Mujhe kisi supported video ka link bhejo.\n"
         "Main uska video download karke yahin bhej dunga.\n\n"
         "⚡ <b>Fast • Simple • Easy</b>"
@@ -816,7 +816,7 @@ async def check_join_callback(
     if not joined:
 
         await callback_query.answer(
-            "❌ Aapne abhi channel join nahi kiya.",
+            "🚫 Access Denied. Join Kar Le L@ude",
             show_alert=True
         )
 
@@ -837,7 +837,7 @@ async def check_join_callback(
 
     welcome = (
         f"👋 <b>Welcome {name}!</b>\n\n"
-        "🎬 <b>MISSTU Video Downloader</b>\n\n"
+        "🎬 <b>Alexa Video Downloader</b>\n\n"
         "📥 Mujhe kisi supported video ka link bhejo.\n"
         "Main uska video download karke yahin bhej dunga.\n\n"
         "⚡ <b>Fast • Simple • Easy</b>"
@@ -1586,7 +1586,7 @@ async def video_handler(
 
         await status.edit_text(
             "⬆️ <b>Uploading video to Telegram...</b>\n\n"
-            "Please wait..."
+            "Ruko Jara Sabar Karo...."
         )
 
 
@@ -1610,7 +1610,7 @@ async def video_handler(
                     video=str(output_file),
                     caption=(
                         "🎬 <b>Video Downloaded Successfully!</b>\n\n"
-                        "⚡ <b>MISSTU Downloader</b>"
+                        "⚡ <b>Alexa Downloader</b>"
                     ),
                     supports_streaming=True,
                 )
