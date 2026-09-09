@@ -26,7 +26,6 @@ ADMIN_ID_RAW = os.getenv("ADMIN_ID")
 CHANNEL_ID_RAW = os.getenv("CHANNEL_ID")
 CHANNEL_URL = os.getenv("CHANNEL_URL")
 
-# Downloader API ab Environment Variable se liya jayega
 DOWNLOADER_API = os.getenv("DOWNLOADER_API")
 
 
@@ -217,7 +216,6 @@ async def is_user_joined(user_id, retries=3):
                 flush=True
             )
 
-            # Normal member/admin/owner
             if status in (
                 "member",
                 "administrator",
@@ -227,7 +225,6 @@ async def is_user_joined(user_id, retries=3):
             ):
                 return True, None
 
-            # Restricted member
             if status == "restricted":
                 is_member = getattr(
                     member,
@@ -237,7 +234,6 @@ async def is_user_joined(user_id, retries=3):
 
                 return bool(is_member), None
 
-            # Not joined
             if status in (
                 "left",
                 "kicked",
@@ -275,8 +271,6 @@ async def is_user_joined(user_id, retries=3):
 
             lower_error = error_text.lower()
 
-            # Telegram ke kuch errors ka matlab simply
-            # user channel mein nahi hai.
             if (
                 "user not participant" in lower_error
                 or "user_not_participant" in lower_error
@@ -553,12 +547,26 @@ async def start_handler(
             "<b>Joined</b> again."
         )
 
+        photo = await get_user_photo(
+            user.id
+        )
+
         try:
 
-            await message.reply_text(
-                text,
-                reply_markup=join_keyboard()
-            )
+            if photo:
+
+                await message.reply_photo(
+                    photo=photo,
+                    caption=text,
+                    reply_markup=join_keyboard()
+                )
+
+            else:
+
+                await message.reply_text(
+                    text,
+                    reply_markup=join_keyboard()
+                )
 
         except Exception as e:
 
@@ -582,17 +590,32 @@ async def start_handler(
             "🔐 <b>Access Required</b>\n\n"
             "Bot use karne ke liye pehle hamare "
             "channel ko join karo.\n\n"
+            "📢 <b>Join Channel</b> par click karo.\n"
             "Join karne ke baad neeche "
             "<b>Joined</b> button press karo."
         )
 
+        # User ka Telegram profile DP
+        photo = await get_user_photo(
+            user.id
+        )
 
         try:
 
-            await message.reply_text(
-                text,
-                reply_markup=join_keyboard()
-            )
+            if photo:
+
+                await message.reply_photo(
+                    photo=photo,
+                    caption=text,
+                    reply_markup=join_keyboard()
+                )
+
+            else:
+
+                await message.reply_text(
+                    text,
+                    reply_markup=join_keyboard()
+                )
 
         except Exception as e:
 
@@ -601,6 +624,16 @@ async def start_handler(
                 repr(e),
                 flush=True
             )
+
+            try:
+
+                await message.reply_text(
+                    text,
+                    reply_markup=join_keyboard()
+                )
+
+            except Exception:
+                pass
 
         return
 
@@ -1644,7 +1677,6 @@ def start_telegram_bot():
                 flush=True
             )
 
-            # app.run() internally start -> idle -> stop
             app.run()
 
             print(
