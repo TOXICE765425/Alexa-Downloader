@@ -12,7 +12,10 @@ import requests
 from flask import Flask
 
 from pyrogram import Client, filters
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from pyrogram.types import (
+    InlineKeyboardMarkup,
+    InlineKeyboardButton
+)
 from pyrogram.errors import FloodWait
 
 
@@ -29,76 +32,123 @@ ADMIN_ID_RAW = os.getenv("ADMIN_ID")
 CHANNEL_ID_RAW = os.getenv("CHANNEL_ID")
 CHANNEL_URL = os.getenv("CHANNEL_URL")
 
-# Downloader API
 DOWNLOADER_API = os.getenv("DOWNLOADER_API")
 
 
 # ============================================================
-# CONFIG VALIDATION
+# VALIDATE ENVIRONMENT
 # ============================================================
 
-if not BOT_TOKEN:
-    raise RuntimeError("BOT_TOKEN environment variable missing")
+required = {
+    "BOT_TOKEN": BOT_TOKEN,
+    "API_ID": API_ID_RAW,
+    "API_HASH": API_HASH,
+    "ADMIN_ID": ADMIN_ID_RAW,
+    "CHANNEL_ID": CHANNEL_ID_RAW,
+    "CHANNEL_URL": CHANNEL_URL,
+    "DOWNLOADER_API": DOWNLOADER_API,
+}
 
-if not API_ID_RAW:
-    raise RuntimeError("API_ID environment variable missing")
+missing = [
+    key for key, value in required.items()
+    if not value
+]
 
-if not API_HASH:
-    raise RuntimeError("API_HASH environment variable missing")
-
-if not ADMIN_ID_RAW:
-    raise RuntimeError("ADMIN_ID environment variable missing")
-
-if not CHANNEL_ID_RAW:
-    raise RuntimeError("CHANNEL_ID environment variable missing")
-
-if not CHANNEL_URL:
-    raise RuntimeError("CHANNEL_URL environment variable missing")
-
-if not DOWNLOADER_API:
-    raise RuntimeError("DOWNLOADER_API environment variable missing")
+if missing:
+    raise RuntimeError(
+        "Missing environment variables: "
+        + ", ".join(missing)
+    )
 
 
 try:
     API_ID = int(API_ID_RAW)
-    ADMIN_ID = int(ADMIN_ID_RAW)
-    CHANNEL_ID = int(CHANNEL_ID_RAW)
 except ValueError:
-    raise RuntimeError(
-        "API_ID, ADMIN_ID and CHANNEL_ID must be valid numbers"
+    raise RuntimeError("API_ID must be a number")
+
+
+try:
+    ADMIN_ID = int(ADMIN_ID_RAW)
+except ValueError:
+    raise RuntimeError("ADMIN_ID must be a number")
+
+
+# CHANNEL_ID can be:
+# -1001234567890
+# OR
+# @channelusername
+
+CHANNEL_ID = CHANNEL_ID_RAW.strip()
+
+if CHANNEL_ID.lstrip("-").isdigit():
+    CHANNEL_ID = int(CHANNEL_ID)
+
+
+# ============================================================
+# FLASK
+# ============================================================
+
+web = Flask(__name__)
+
+
+@web.route("/")
+def home():
+    return "MISSTU Video Downloader Bot is running"
+
+
+@web.route("/health")
+def health():
+    return "OK"
+
+
+def run_web_server():
+    port = int(os.getenv("PORT", "10000"))
+
+    web.run(
+        host="0.0.0.0",
+        port=port,
+        debug=False,
+        use_reloader=False
     )
 
 
 # ============================================================
-# APP / PATHS
+# USER STORAGE
 # ============================================================
 
-app = Flask(__name__)
+DATA_DIR = (
+    Path(tempfile.gettempdir())
+    / "misstu_video_bot"
+)
 
-DATA_DIR = Path(tempfile.gettempdir()) / "misstu_video_bot"
-DATA_DIR.mkdir(parents=True, exist_ok=True)
+DATA_DIR.mkdir(
+    parents=True,
+    exist_ok=True
+)
 
 USERS_FILE = DATA_DIR / "users.json"
 
 
-# ============================================================
-# USER DATABASE
-# ============================================================
-
 def load_users():
+
     if not USERS_FILE.exists():
         return {}
 
     try:
-        with open(USERS_FILE, "r", encoding="utf-8") as f:
+        with open(
+            USERS_FILE,
+            "r",
+            encoding="utf-8"
+        ) as f:
             data = json.load(f)
 
-        # Old format support:
-        # [123456789, 987654321]
+        # Old list format support
         if isinstance(data, list):
+
             result = {}
 
             for user_id in data:
+
                 result[str(user_id)] = {
                     "user_id": int(user_id),
                     "name": "Unknown",
@@ -107,45 +157,70 @@ def load_users():
 
             return result
 
-        # New format
         if isinstance(data, dict):
             return data
 
     except Exception as e:
-        print("User database read error:", e)
+        print(
+            "Users file read error:",
+            e
+        )
 
     return {}
 
 
 def save_users(users):
+
     try:
-        with open(USERS_FILE, "w", encoding="utf-8") as f:
+
+        with open(
+            USERS_FILE,
+            "w",
+            encoding="utf-8"
+        ) as f:
+
             json.dump(
                 users,
                 f,
                 ensure_ascii=False,
                 indent=2
             )
+
     except Exception as e:
-        print("User database save error:", e)
+
+        print(
+            "Users file save error:",
+            e
+        )
 
 
 USERS = load_users()
 
 
 def add_user(user):
+
     try:
+
         user_id = int(user.id)
 
-        first_name = user.first_name or ""
-        last_name = user.last_name or ""
+        first_name = (
+            user.first_name or ""
+        )
 
-        name = f"{first_name} {last_name}".strip()
+        last_name = (
+            user.last_name or ""
+        )
+
+        name = (
+            f"{first_name} {last_name}"
+        ).strip()
 
         if not name:
             name = "Unknown"
 
-        username = user.username or ""
+        username = (
+            user.username or ""
+        )
 
         USERS[str(user_id)] = {
             "user_id": user_id,
@@ -156,44 +231,34 @@ def add_user(user):
         save_users(USERS)
 
     except Exception as e:
-        print("Add user error:", e)
+
+        print(
+            "Add user error:",
+            e
+        )
 
 
 def remove_user(user_id):
+
     try:
-        USERS.pop(str(user_id), None)
+
+        USERS.pop(
+            str(user_id),
+            None
+        )
+
         save_users(USERS)
+
     except Exception as e:
-        print("Remove user error:", e)
+
+        print(
+            "Remove user error:",
+            e
+        )
 
 
 # ============================================================
-# FLASK HEALTH SERVER
-# ============================================================
-
-@app.route("/")
-def home():
-    return "MISSTU Video Downloader Bot is running"
-
-
-@app.route("/health")
-def health():
-    return "OK"
-
-
-def run_flask():
-    port = int(os.getenv("PORT", "10000"))
-
-    app.run(
-        host="0.0.0.0",
-        port=port,
-        debug=False,
-        use_reloader=False
-    )
-
-
-# ============================================================
-# PYROGRAM CLIENT
+# PYROGRAM
 # ============================================================
 
 client = Client(
@@ -208,10 +273,11 @@ client = Client(
 
 
 # ============================================================
-# CHANNEL JOIN KEYBOARD
+# JOIN BUTTONS
 # ============================================================
 
 def join_keyboard():
+
     return InlineKeyboardMarkup(
         [
             [
@@ -231,69 +297,118 @@ def join_keyboard():
 
 
 # ============================================================
-# CHANNEL JOIN CHECK
+# CHECK CHANNEL MEMBERSHIP
 # ============================================================
 
-async def is_user_joined(user_id):
+async def check_membership(user_id):
+
     try:
+
         member = await client.get_chat_member(
-            CHANNEL_ID,
-            user_id
+            chat_id=CHANNEL_ID,
+            user_id=user_id
         )
 
-        status = str(member.status).lower()
+        status = str(
+            member.status
+        ).lower()
 
-        if status in (
-            "member",
-            "administrator",
-            "owner"
-        ):
-            return True
+        print(
+            f"[JOIN CHECK] "
+            f"user={user_id} "
+            f"channel={CHANNEL_ID} "
+            f"status={status}"
+        )
 
-        # Restricted users can still be members
+        # Normal member
+        if status == "member":
+            return True, None
+
+        # Admin
+        if status == "administrator":
+            return True, None
+
+        # Owner
+        if status == "owner":
+            return True, None
+
+        # Restricted member
         if status == "restricted":
-            try:
-                return bool(member.is_member)
-            except Exception:
-                return False
 
-        return False
+            is_member = getattr(
+                member,
+                "is_member",
+                False
+            )
+
+            if is_member:
+                return True, None
+
+            return False, None
+
+        # Left / kicked
+        if status in (
+            "left",
+            "banned",
+            "kicked"
+        ):
+            return False, None
+
+        return False, None
 
     except Exception as e:
+
         print(
-            f"Join check error for {user_id}:",
-            e
+            f"[JOIN CHECK ERROR] "
+            f"user={user_id}: {e}"
         )
 
-        return False
+        return False, str(e)
 
 
 # ============================================================
-# JOIN REQUIRED
+# REQUIRE JOIN
 # ============================================================
 
 async def require_join(message):
+
     user_id = message.from_user.id
 
-    # Admin ko join requirement nahi
+    # Admin bypass
     if user_id == ADMIN_ID:
         return True
 
-    joined = await is_user_joined(user_id)
+    joined, error = await check_membership(
+        user_id
+    )
 
     if joined:
         return True
 
-    text = (
-        "🚫 <b>Access Denied</b>\n\n"
-        "Bot use karne ke liye pehle hamara "
-        "channel join karo.\n\n"
-        "Channel join karne ke baad "
-        "<b>✅ Joined</b> button dabao."
-    )
+    # Membership API error
+    if error:
+
+        print(
+            "Membership verification failed:",
+            error
+        )
+
+        await message.reply_text(
+            "⚠️ <b>Join verification problem</b>\n\n"
+            "Bot channel membership verify nahi "
+            "kar paa raha hai.\n\n"
+            "Channel me bot ko Administrator banaye "
+            "aur CHANNEL_ID check kare."
+        )
+
+        return False
 
     await message.reply_text(
-        text,
+        "🚫 <b>Access Denied</b>\n\n"
+        "Video download karne ke liye "
+        "pehle hamara channel join karo.\n\n"
+        "Join karne ke baad "
+        "<b>✅ Joined</b> dabao.",
         reply_markup=join_keyboard()
     )
 
@@ -301,7 +416,7 @@ async def require_join(message):
 
 
 # ============================================================
-# START COMMAND
+# /START
 # ============================================================
 
 @client.on_message(
@@ -314,20 +429,34 @@ async def start_command(client, message):
 
     add_user(user)
 
-    user_name = user.first_name or "User"
+    name = (
+        user.first_name
+        or "User"
+    )
 
-    # Admin direct welcome
+    # --------------------------------------------------------
+    # ADMIN
+    # --------------------------------------------------------
+
     if user.id == ADMIN_ID:
+
         text = (
-            f"👋 <b>Welcome {user_name}!</b>\n\n"
+            f"👋 <b>Welcome {name}!</b>\n\n"
             "🤖 <b>Alexa Video Downloader Bot</b>\n\n"
-            "You are the bot admin.\n\n"
-            "Send any supported video URL "
-            "to download it."
+            "👑 <b>Admin Panel</b>\n\n"
+            "🔗 Video link bhejo aur download karo.\n\n"
+            "Commands:\n"
+            "• /user\n"
+            "• /broadcast message\n"
+            "• /broadcast USER_ID message\n"
+            "• /add message\n"
+            "• Reply + /add"
         )
 
         try:
+
             photos = []
+
             async for photo in client.get_chat_photos(
                 user.id,
                 limit=1
@@ -335,24 +464,38 @@ async def start_command(client, message):
                 photos.append(photo)
 
             if photos:
+
                 await message.reply_photo(
                     photos[0].file_id,
                     caption=text
                 )
+
             else:
-                await message.reply_text(text)
+
+                await message.reply_text(
+                    text
+                )
 
         except Exception:
-            await message.reply_text(text)
+
+            await message.reply_text(
+                text
+            )
 
         return
 
-    joined = await is_user_joined(user.id)
+    # --------------------------------------------------------
+    # USER JOIN CHECK
+    # --------------------------------------------------------
+
+    joined, error = await check_membership(
+        user.id
+    )
 
     if not joined:
 
         text = (
-            f"👋 <b>Welcome {user_name}!</b>\n\n"
+            f"👋 <b>Welcome {name}!</b>\n\n"
             "🤖 <b>Alexa Video Downloader Bot</b>\n\n"
             "Video download karne ke liye "
             "pehle hamara channel join karo.\n\n"
@@ -360,6 +503,7 @@ async def start_command(client, message):
         )
 
         try:
+
             photos = []
 
             async for photo in client.get_chat_photos(
@@ -369,18 +513,22 @@ async def start_command(client, message):
                 photos.append(photo)
 
             if photos:
+
                 await message.reply_photo(
                     photos[0].file_id,
                     caption=text,
                     reply_markup=join_keyboard()
                 )
+
             else:
+
                 await message.reply_text(
                     text,
                     reply_markup=join_keyboard()
                 )
 
         except Exception:
+
             await message.reply_text(
                 text,
                 reply_markup=join_keyboard()
@@ -388,15 +536,21 @@ async def start_command(client, message):
 
         return
 
-    # Already joined
+    # --------------------------------------------------------
+    # ALREADY JOINED
+    # --------------------------------------------------------
+
     text = (
-        f"👋 <b>Welcome {user_name}!</b>\n\n"
+        f"👋 <b>Welcome {name}!</b>\n\n"
         "🤖 <b>Alexa Video Downloader Bot</b>\n\n"
+        "✅ Channel verified.\n\n"
         "🔗 Bas video ka link bhejo.\n"
-        "⚡ Main video download karke Telegram par bhej dunga."
+        "⚡ Main video download karke "
+        "Telegram par bhej dunga."
     )
 
     try:
+
         photos = []
 
         async for photo in client.get_chat_photos(
@@ -406,40 +560,88 @@ async def start_command(client, message):
             photos.append(photo)
 
         if photos:
+
             await message.reply_photo(
                 photos[0].file_id,
                 caption=text
             )
+
         else:
-            await message.reply_text(text)
+
+            await message.reply_text(
+                text
+            )
 
     except Exception:
-        await message.reply_text(text)
+
+        await message.reply_text(
+            text
+        )
 
 
 # ============================================================
-# JOIN CHECK BUTTON
+# JOINED BUTTON
 # ============================================================
 
 @client.on_callback_query(
     filters.regex("^check_join$")
 )
-async def check_join_callback(client, callback):
+async def check_join_callback(
+    client,
+    callback
+):
 
     user = callback.from_user
 
     add_user(user)
 
-    joined = await is_user_joined(user.id)
+    # Admin bypass
+    if user.id == ADMIN_ID:
+
+        joined = True
+        error = None
+
+    else:
+
+        joined, error = await check_membership(
+            user.id
+        )
+
+    # --------------------------------------------------------
+    # ERROR
+    # --------------------------------------------------------
+
+    if error:
+
+        await callback.answer(
+            "⚠️ Verification error. "
+            "Bot/channel settings check karo.",
+            show_alert=True
+        )
+
+        print(
+            "Callback join error:",
+            error
+        )
+
+        return
+
+    # --------------------------------------------------------
+    # NOT JOINED
+    # --------------------------------------------------------
 
     if not joined:
 
         await callback.answer(
-            "🚫 Access denied! Pehle channel join karo.",
+            "🚫 Pehle channel join karo!",
             show_alert=True
         )
 
         return
+
+    # --------------------------------------------------------
+    # JOINED
+    # --------------------------------------------------------
 
     await callback.answer(
         "🎉 Congratulations! You are Joined.",
@@ -447,29 +649,39 @@ async def check_join_callback(client, callback):
     )
 
     text = (
-        f"🎉 <b>Welcome {user.first_name or 'User'}!</b>\n\n"
-        "✅ Channel membership verified.\n\n"
+        f"🎉 <b>Welcome "
+        f"{user.first_name or 'User'}!</b>\n\n"
+        "✅ <b>Channel membership verified.</b>\n\n"
         "🤖 <b>Alexa Video Downloader Bot</b>\n\n"
         "🔗 Ab video ka link bhejo."
     )
 
     try:
+
         await callback.message.edit_caption(
             caption=text,
             reply_markup=None
         )
+
     except Exception:
+
         try:
+
             await callback.message.edit_text(
                 text,
                 reply_markup=None
             )
-        except Exception:
-            pass
+
+        except Exception as e:
+
+            print(
+                "Join success edit error:",
+                e
+            )
 
 
 # ============================================================
-# /USER COMMAND
+# /USER
 # ============================================================
 
 @client.on_message(
@@ -484,9 +696,11 @@ async def user_command(client, message):
     users = load_users()
 
     if not users:
+
         await message.reply_text(
             "📂 Abhi koi registered user nahi hai."
         )
+
         return
 
     lines = [
@@ -500,9 +714,21 @@ async def user_command(client, message):
         users.values(),
         start=1
     ):
-        user_id = data.get("user_id", "")
-        name = data.get("name", "Unknown")
-        username = data.get("username", "")
+
+        user_id = data.get(
+            "user_id",
+            ""
+        )
+
+        name = data.get(
+            "name",
+            "Unknown"
+        )
+
+        username = data.get(
+            "username",
+            ""
+        )
 
         username_text = (
             f"@{username}"
@@ -518,66 +744,85 @@ async def user_command(client, message):
 
     result = "\n".join(lines)
 
-    # Telegram message limit protection
-    chunks = []
-
+    # Telegram 4096 limit
     while len(result) > 3900:
+
         split_at = result.rfind(
             "\n",
             0,
             3900
         )
 
-        if split_at == -1:
+        if split_at <= 0:
             split_at = 3900
 
-        chunks.append(result[:split_at])
-        result = result[split_at:]
+        chunk = result[:split_at]
 
-    chunks.append(result)
+        await message.reply_text(
+            chunk
+        )
 
-    for chunk in chunks:
-        await message.reply_text(chunk)
+        result = result[split_at:].lstrip()
+
+    if result:
+        await message.reply_text(
+            result
+        )
 
 
 # ============================================================
 # /BROADCAST
+#
+# /broadcast Hello
+#
+# /broadcast 123456789 Hello
 # ============================================================
 
 @client.on_message(
     filters.private &
     filters.command("broadcast")
 )
-async def broadcast_command(client, message):
+async def broadcast_command(
+    client,
+    message
+):
 
     if message.from_user.id != ADMIN_ID:
         return
 
-    text = message.text or ""
+    text = (
+        message.text or ""
+    ).strip()
 
-    parts = text.split(maxsplit=2)
+    parts = text.split(
+        maxsplit=2
+    )
 
     if len(parts) < 2:
+
         await message.reply_text(
-            "❌ Usage:\n\n"
+            "❌ <b>Usage</b>\n\n"
+            "All users:\n"
             "<code>/broadcast Hello everyone</code>\n\n"
             "Specific user:\n"
-            "<code>/broadcast USER_ID Hello</code>"
+            "<code>/broadcast 123456789 Hello</code>"
         )
+
         return
 
     # --------------------------------------------------------
-    # Personal message
-    # /broadcast 123456789 Hello
+    # SPECIFIC USER
     # --------------------------------------------------------
 
     if (
-        len(parts) >= 3
+        len(parts) == 3
         and parts[1].isdigit()
     ):
+
+        target_id = int(parts[1])
+        broadcast_text = parts[2]
+
         try:
-            target_id = int(parts[1])
-            broadcast_text = parts[2]
 
             await client.send_message(
                 target_id,
@@ -590,45 +835,68 @@ async def broadcast_command(client, message):
             )
 
         except FloodWait as e:
-            await message.reply_text(
-                f"⏳ FloodWait: {e.value} seconds"
+
+            await asyncio.sleep(
+                e.value
             )
 
+            try:
+
+                await client.send_message(
+                    target_id,
+                    broadcast_text
+                )
+
+                await message.reply_text(
+                    f"✅ Message sent to "
+                    f"<code>{target_id}</code>"
+                )
+
+            except Exception as e2:
+
+                await message.reply_text(
+                    f"❌ Failed:\n"
+                    f"<code>{e2}</code>"
+                )
+
         except Exception as e:
+
             await message.reply_text(
-                f"❌ Failed:\n<code>{e}</code>"
+                f"❌ Failed:\n"
+                f"<code>{e}</code>"
             )
 
         return
 
     # --------------------------------------------------------
-    # Broadcast to all
+    # ALL USERS
     # --------------------------------------------------------
 
-    broadcast_text = text.split(
-        " ",
-        1
-    )[1].strip()
+    broadcast_text = parts[1]
 
     users = load_users()
 
     if not users:
+
         await message.reply_text(
             "❌ User list empty."
         )
+
         return
+
+    await message.reply_text(
+        f"📢 <b>Broadcast Started</b>\n\n"
+        f"👥 Total users: "
+        f"<b>{len(users)}</b>"
+    )
 
     sent = 0
     failed = 0
 
-    await message.reply_text(
-        f"📢 Broadcast started...\n"
-        f"👥 Users: {len(users)}"
-    )
-
     for user_id in list(users.keys()):
 
         try:
+
             await client.send_message(
                 int(user_id),
                 broadcast_text
@@ -636,12 +904,14 @@ async def broadcast_command(client, message):
 
             sent += 1
 
-            await asyncio.sleep(0.05)
+            await asyncio.sleep(
+                0.08
+            )
 
         except FloodWait as e:
 
             print(
-                f"FloodWait {e.value}s"
+                f"FloodWait: {e.value}s"
             )
 
             await asyncio.sleep(
@@ -649,6 +919,7 @@ async def broadcast_command(client, message):
             )
 
             try:
+
                 await client.send_message(
                     int(user_id),
                     broadcast_text
@@ -656,7 +927,13 @@ async def broadcast_command(client, message):
 
                 sent += 1
 
-            except Exception:
+            except Exception as e2:
+
+                print(
+                    "Broadcast retry failed:",
+                    e2
+                )
+
                 failed += 1
 
         except Exception as e:
@@ -668,8 +945,10 @@ async def broadcast_command(client, message):
 
             failed += 1
 
-            # User blocked/deactivated bot
-            remove_user(user_id)
+            # Remove inaccessible users
+            remove_user(
+                user_id
+            )
 
     await message.reply_text(
         "📢 <b>Broadcast Completed</b>\n\n"
@@ -679,28 +958,42 @@ async def broadcast_command(client, message):
 
 
 # ============================================================
-# /ADD COMMAND
+# /ADD
 #
 # /add Hello
+#
 # OR
 #
-# Reply to any Telegram message and send:
-# /add
+# Reply to any message + /add
 #
-# It copies the replied message to configured channel.
+# Supports:
+# photo
+# video
+# document
+# sticker
+# animation
+# audio
+# voice
+# contact
+# location
+# text
+# etc.
 # ============================================================
 
 @client.on_message(
     filters.private &
     filters.command("add")
 )
-async def add_command(client, message):
+async def add_command(
+    client,
+    message
+):
 
     if message.from_user.id != ADMIN_ID:
         return
 
     # --------------------------------------------------------
-    # Reply mode
+    # REPLY MODE
     # --------------------------------------------------------
 
     if message.reply_to_message:
@@ -708,6 +1001,7 @@ async def add_command(client, message):
         source = message.reply_to_message
 
         try:
+
             await client.copy_message(
                 chat_id=CHANNEL_ID,
                 from_chat_id=source.chat.id,
@@ -715,8 +1009,8 @@ async def add_command(client, message):
             )
 
             await message.reply_text(
-                "✅ Message successfully added "
-                "to the channel."
+                "✅ Message successfully "
+                "added to the channel."
             )
 
         except FloodWait as e:
@@ -726,6 +1020,7 @@ async def add_command(client, message):
             )
 
             try:
+
                 await client.copy_message(
                     chat_id=CHANNEL_ID,
                     from_chat_id=source.chat.id,
@@ -733,8 +1028,8 @@ async def add_command(client, message):
                 )
 
                 await message.reply_text(
-                    "✅ Message successfully added "
-                    "to the channel."
+                    "✅ Message successfully "
+                    "added to the channel."
                 )
 
             except Exception as e2:
@@ -754,42 +1049,51 @@ async def add_command(client, message):
         return
 
     # --------------------------------------------------------
-    # Text mode
-    # /add Hello
+    # TEXT MODE
     # --------------------------------------------------------
 
-    text = message.text or ""
+    text = (
+        message.text or ""
+    )
 
     parts = text.split(
         " ",
         1
     )
 
-    if len(parts) < 2 or not parts[1].strip():
+    if len(parts) < 2:
 
         await message.reply_text(
-            "❌ Usage:\n\n"
+            "❌ <b>Usage</b>\n\n"
             "Text:\n"
-            "<code>/add Hello</code>\n\n"
-            "Photo/Video/Document/Sticker/etc:\n"
-            "Message ko reply karo aur "
-            "<code>/add</code> bhejo."
+            "<code>/add Hello ❤️</code>\n\n"
+            "Media:\n"
+            "Photo/video/document/sticker etc. "
+            "ko reply karo aur <code>/add</code> bhejo."
         )
 
         return
 
     content = parts[1].strip()
 
+    if not content:
+
+        await message.reply_text(
+            "❌ Message empty hai."
+        )
+
+        return
+
     try:
 
         await client.send_message(
-            CHANNEL_ID,
-            content
+            chat_id=CHANNEL_ID,
+            text=content
         )
 
         await message.reply_text(
-            "✅ Text successfully added "
-            "to the channel."
+            "✅ Text successfully "
+            "added to the channel."
         )
 
     except FloodWait as e:
@@ -799,14 +1103,15 @@ async def add_command(client, message):
         )
 
         try:
+
             await client.send_message(
-                CHANNEL_ID,
-                content
+                chat_id=CHANNEL_ID,
+                text=content
             )
 
             await message.reply_text(
-                "✅ Text successfully added "
-                "to the channel."
+                "✅ Text successfully "
+                "added to the channel."
             )
 
         except Exception as e2:
@@ -825,7 +1130,7 @@ async def add_command(client, message):
 
 
 # ============================================================
-# FIND VIDEO URL FROM API RESPONSE
+# FIND URL IN API RESPONSE
 # ============================================================
 
 def find_video_url(data):
@@ -835,8 +1140,8 @@ def find_video_url(data):
         value = data.strip()
 
         if (
-            value.startswith("http://")
-            or value.startswith("https://")
+            value.startswith("https://")
+            or value.startswith("http://")
         ):
             return value
 
@@ -844,7 +1149,6 @@ def find_video_url(data):
 
     if isinstance(data, dict):
 
-        # Common direct keys
         preferred_keys = [
             "url",
             "video_url",
@@ -853,9 +1157,12 @@ def find_video_url(data):
             "download",
             "media_url",
             "play_url",
-            "link"
+            "playback_url",
+            "link",
+            "src"
         ]
 
+        # First check common keys
         for key in preferred_keys:
 
             if key in data:
@@ -867,7 +1174,7 @@ def find_video_url(data):
                 if result:
                     return result
 
-        # Search everything recursively
+        # Then recursively search
         for value in data.values():
 
             result = find_video_url(
@@ -899,14 +1206,19 @@ def get_video_url(source_url):
 
     api_url = (
         DOWNLOADER_API
-        + quote(source_url, safe="")
+        + quote(
+            source_url,
+            safe=""
+        )
     )
 
-    print("Downloader API:", api_url)
+    print(
+        "Downloader API request started"
+    )
 
     response = requests.get(
         api_url,
-        timeout=60,
+        timeout=90,
         headers={
             "User-Agent":
                 "Mozilla/5.0"
@@ -917,11 +1229,14 @@ def get_video_url(source_url):
 
     content_type = (
         response.headers
-        .get("content-type", "")
+        .get(
+            "content-type",
+            ""
+        )
         .lower()
     )
 
-    if "application/json" in content_type:
+    if "json" in content_type:
 
         data = response.json()
 
@@ -932,9 +1247,17 @@ def get_video_url(source_url):
         except Exception:
             data = response.text
 
-    video_url = find_video_url(data)
+    video_url = find_video_url(
+        data
+    )
 
     if not video_url:
+
+        print(
+            "API response:",
+            str(data)[:2000]
+        )
+
         raise RuntimeError(
             "API response me video URL nahi mila."
         )
@@ -946,12 +1269,15 @@ def get_video_url(source_url):
 # DOWNLOAD VIDEO
 # ============================================================
 
-def download_video(video_url, output_path):
+def download_video(
+    video_url,
+    output_path
+):
 
     response = requests.get(
         video_url,
         stream=True,
-        timeout=120,
+        timeout=180,
         headers={
             "User-Agent":
                 "Mozilla/5.0"
@@ -972,16 +1298,18 @@ def download_video(video_url, output_path):
             if chunk:
                 file.write(chunk)
 
-    if not os.path.exists(output_path):
+    if not os.path.exists(
+        output_path
+    ):
         raise RuntimeError(
             "Video file create nahi hui."
         )
 
-    file_size = os.path.getsize(
+    size = os.path.getsize(
         output_path
     )
 
-    if file_size == 0:
+    if size <= 0:
         raise RuntimeError(
             "Downloaded video empty hai."
         )
@@ -990,11 +1318,11 @@ def download_video(video_url, output_path):
 
 
 # ============================================================
-# VIDEO URL FILTER
+# URL DETECTION
 # ============================================================
 
 URL_PATTERN = re.compile(
-    r"https?://\S+",
+    r"https?://[^\s]+",
     re.IGNORECASE
 )
 
@@ -1015,9 +1343,15 @@ URL_PATTERN = re.compile(
         ]
     )
 )
-async def video_downloader(client, message):
+async def video_downloader(
+    client,
+    message
+):
 
-    # Join check
+    # --------------------------------------------------------
+    # CHANNEL JOIN
+    # --------------------------------------------------------
+
     allowed = await require_join(
         message
     )
@@ -1040,16 +1374,20 @@ async def video_downloader(client, message):
     if not match:
 
         await message.reply_text(
-            "❌ Valid video URL bhejo."
+            "❌ <b>Valid video URL bhejo.</b>\n\n"
+            "Example:\n"
+            "<code>https://example.com/video</code>"
         )
 
         return
 
-    source_url = match.group(0)
+    source_url = match.group(
+        0
+    )
 
     status = await message.reply_text(
         "⏳ <b>Processing...</b>\n\n"
-        "🔎 Video link check ho raha hai."
+        "🔎 Link check ho raha hai..."
     )
 
     temp_dir = tempfile.mkdtemp(
@@ -1069,7 +1407,8 @@ async def video_downloader(client, message):
 
         await status.edit_text(
             "⏳ <b>Processing...</b>\n\n"
-            "🔎 Downloader API se data aa raha hai..."
+            "🔎 Downloader API se "
+            "video information aa rahi hai..."
         )
 
         video_url = await asyncio.to_thread(
@@ -1093,7 +1432,7 @@ async def video_downloader(client, message):
         )
 
         # ----------------------------------------------------
-        # SEND
+        # UPLOAD
         # ----------------------------------------------------
 
         await status.edit_text(
@@ -1106,9 +1445,8 @@ async def video_downloader(client, message):
             "🥰 Alexa Video Downloader"
         )
 
-        sent = False
+        uploaded = False
 
-        # Retry upload
         for attempt in range(4):
 
             try:
@@ -1120,7 +1458,7 @@ async def video_downloader(client, message):
                     supports_streaming=True
                 )
 
-                sent = True
+                uploaded = True
                 break
 
             except FloodWait as e:
@@ -1145,24 +1483,29 @@ async def video_downloader(client, message):
                 if attempt < 3:
                     await asyncio.sleep(2)
 
-        if not sent:
+        if not uploaded:
 
             raise RuntimeError(
                 "Telegram upload failed."
             )
 
+        # Delete processing message
         try:
+
             await status.delete()
+
         except Exception:
             pass
 
     except requests.exceptions.Timeout:
 
         try:
+
             await status.edit_text(
-                "❌ API/Download timeout.\n"
-                "Thodi der baad try karo."
+                "❌ <b>Request Timeout</b>\n\n"
+                "API/download server ne time out diya."
             )
+
         except Exception:
             pass
 
@@ -1174,10 +1517,12 @@ async def video_downloader(client, message):
         )
 
         try:
+
             await status.edit_text(
-                "❌ Downloader API error.\n"
-                "Link ya API response check karo."
+                "❌ <b>Downloader API Error</b>\n\n"
+                "API request complete nahi ho saka."
             )
+
         except Exception:
             pass
 
@@ -1189,17 +1534,19 @@ async def video_downloader(client, message):
         )
 
         try:
+
             await status.edit_text(
                 "❌ <b>Download Failed</b>\n\n"
                 "Is link ko download nahi kiya ja saka."
             )
+
         except Exception:
             pass
 
     finally:
 
         # ----------------------------------------------------
-        # CLEAN TEMP FILES
+        # CLEAN TEMP FILE
         # ----------------------------------------------------
 
         try:
@@ -1214,10 +1561,13 @@ async def video_downloader(client, message):
             if os.path.isdir(
                 temp_dir
             ):
+
                 try:
+
                     os.rmdir(
                         temp_dir
                     )
+
                 except Exception:
                     pass
 
@@ -1230,23 +1580,33 @@ async def video_downloader(client, message):
 
 
 # ============================================================
-# MAIN
+# START BOT
 # ============================================================
 
 if __name__ == "__main__":
 
     print("=" * 60)
-    print("MISSTU VIDEO DOWNLOADER BOT")
+    print("ALEXA VIDEO DOWNLOADER BOT")
     print("=" * 60)
-    print("Starting health server...")
+
+    print(
+        "CHANNEL_ID:",
+        CHANNEL_ID
+    )
+
+    print(
+        "Starting health server..."
+    )
 
     flask_thread = threading.Thread(
-        target=run_flask,
+        target=run_web_server,
         daemon=True
     )
 
     flask_thread.start()
 
-    print("Starting Telegram bot...")
+    print(
+        "Starting Telegram bot..."
+    )
 
     client.run()
