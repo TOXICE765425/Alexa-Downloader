@@ -11,7 +11,7 @@ from urllib.parse import quote
 import requests
 from flask import Flask
 
-from pyrogram import Client, filters, idle
+from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from pyrogram.errors import (
     FloodWait,
@@ -37,7 +37,7 @@ DOWNLOADER_API = os.getenv("DOWNLOADER_API")
 
 
 # =========================================================
-# CONFIG CHECK
+# CONFIG VALIDATION
 # =========================================================
 
 if not BOT_TOKEN:
@@ -75,22 +75,24 @@ except Exception:
 
 
 # =========================================================
-# NUMERIC CHANNEL ID
+# CHANNEL
 # =========================================================
 
-CHANNEL_ID_RAW = CHANNEL_ID_RAW.strip()
-
 try:
-    CHANNEL_TARGET = int(CHANNEL_ID_RAW)
+    CHANNEL_TARGET = int(CHANNEL_ID_RAW.strip())
 except Exception:
     raise RuntimeError(
-        "CHANNEL_ID must be numeric. Example: -1001234567890"
+        "CHANNEL_ID must be numeric, example: -1001234567890"
     )
 
-if CHANNEL_TARGET >= 0:
-    raise RuntimeError(
-        "CHANNEL_ID numeric Telegram channel ID normally starts with -100"
-    )
+print("=" * 60)
+print("CONFIGURATION")
+print("=" * 60)
+print("API_ID:", API_ID)
+print("ADMIN_ID:", ADMIN_ID)
+print("CHANNEL_ID:", CHANNEL_TARGET)
+print("CHANNEL_URL:", CHANNEL_URL)
+print("=" * 60)
 
 
 # =========================================================
@@ -109,7 +111,7 @@ app = Client(
 
 
 # =========================================================
-# FLASK
+# FLASK HEALTH SERVER
 # =========================================================
 
 web = Flask(__name__)
@@ -126,7 +128,10 @@ def health():
 
 
 def run_web_server():
-    port = int(os.getenv("PORT", "10000"))
+
+    port = int(
+        os.getenv("PORT", "10000")
+    )
 
     web.run(
         host="0.0.0.0",
@@ -140,7 +145,10 @@ def run_web_server():
 # USERS
 # =========================================================
 
-DATA_DIR = Path(tempfile.gettempdir()) / "misstu_video_bot"
+DATA_DIR = (
+    Path(tempfile.gettempdir())
+    / "misstu_video_bot"
+)
 
 DATA_DIR.mkdir(
     parents=True,
@@ -156,6 +164,7 @@ def load_users():
         return {}
 
     try:
+
         with open(
             USERS_FILE,
             "r",
@@ -181,7 +190,9 @@ def save_users():
 
     try:
 
-        temp_file = USERS_FILE.with_suffix(".tmp")
+        temp_file = USERS_FILE.with_suffix(
+            ".tmp"
+        )
 
         with open(
             temp_file,
@@ -196,7 +207,9 @@ def save_users():
                 indent=2,
             )
 
-        temp_file.replace(USERS_FILE)
+        temp_file.replace(
+            USERS_FILE
+        )
 
     except Exception as e:
 
@@ -228,7 +241,7 @@ def add_user(user):
 
 
 # =========================================================
-# CHANNEL CHECK
+# CHANNEL RESOLVE
 # =========================================================
 
 async def resolve_channel():
@@ -236,25 +249,41 @@ async def resolve_channel():
     print("=" * 60)
     print("CHANNEL CHECK")
     print("CHANNEL_ID:", CHANNEL_TARGET)
-    print("CHANNEL_URL:", CHANNEL_URL)
     print("=" * 60)
 
     try:
 
-        chat = await app.get_chat(CHANNEL_TARGET)
+        chat = await app.get_chat(
+            CHANNEL_TARGET
+        )
 
         print("✅ CHANNEL FOUND")
         print("Title:", chat.title)
         print("ID:", chat.id)
         print("Username:", chat.username)
+        print("=" * 60)
 
         return True
+
+    except FloodWait as e:
+
+        wait = int(e.value)
+
+        print(
+            f"⚠️ CHANNEL CHECK FLOODWAIT: {wait}s"
+        )
+
+        await asyncio.sleep(
+            wait + 2
+        )
+
+        return await resolve_channel()
 
     except PeerIdInvalid:
 
         print("❌ PeerIdInvalid")
         print(
-            "Bot ko isi exact channel me ADMIN banao."
+            "Bot ko isi channel me ADMIN banao."
         )
 
         return False
@@ -273,14 +302,19 @@ async def resolve_channel():
 # JOIN CHECK
 # =========================================================
 
-async def is_user_joined(user_id, retries=3):
+async def is_user_joined(
+    user_id,
+    retries=4,
+):
 
     # -----------------------------------------------------
-    # ADMIN ALWAYS ALLOWED
+    # ADMIN BYPASS
     # -----------------------------------------------------
 
     if user_id == ADMIN_ID:
         return True, None
+
+    last_error = None
 
     for attempt in range(retries):
 
@@ -293,11 +327,15 @@ async def is_user_joined(user_id, retries=3):
 
             status = member.status
 
-            # Pyrogram enum ko string me convert
-            if hasattr(status, "value"):
+            if hasattr(
+                status,
+                "value",
+            ):
                 status = status.value
 
-            status = str(status).lower().strip()
+            status = str(
+                status
+            ).lower().strip()
 
             print(
                 f"[JOIN CHECK] "
@@ -309,25 +347,38 @@ async def is_user_joined(user_id, retries=3):
             # NORMAL MEMBER
             # -------------------------------------------------
 
+            if status == "member":
+                return True, None
+
+            # -------------------------------------------------
+            # ADMIN
+            # -------------------------------------------------
+
             if status in (
-                "member",
                 "administrator",
                 "admin",
-                "owner",
                 "creator",
+                "owner",
             ):
                 return True, None
 
             # -------------------------------------------------
-            # RESTRICTED USER
+            # RESTRICTED
             # -------------------------------------------------
 
             if status == "restricted":
 
-                is_member = getattr(
-                    member,
-                    "is_member",
-                    False,
+                is_member = bool(
+                    getattr(
+                        member,
+                        "is_member",
+                        False,
+                    )
+                )
+
+                print(
+                    "[JOIN CHECK] restricted "
+                    f"is_member={is_member}"
                 )
 
                 if is_member:
@@ -336,7 +387,7 @@ async def is_user_joined(user_id, retries=3):
                 return False, None
 
             # -------------------------------------------------
-            # LEFT / KICKED
+            # NOT MEMBER
             # -------------------------------------------------
 
             if status in (
@@ -346,7 +397,6 @@ async def is_user_joined(user_id, retries=3):
             ):
                 return False, None
 
-            # Unknown status
             print(
                 "[JOIN CHECK] Unknown status:",
                 status,
@@ -359,12 +409,19 @@ async def is_user_joined(user_id, retries=3):
             wait = int(e.value)
 
             print(
-                f"[JOIN FLOODWAIT] {wait}s"
+                f"[JOIN CHECK FLOODWAIT] "
+                f"waiting {wait}s"
             )
 
-            await asyncio.sleep(wait)
+            await asyncio.sleep(
+                wait + 1
+            )
+
+            continue
 
         except RPCError as e:
+
+            last_error = str(e)
 
             print(
                 "[JOIN RPC ERROR]",
@@ -376,8 +433,10 @@ async def is_user_joined(user_id, retries=3):
 
         except Exception as e:
 
+            last_error = str(e)
+
             print(
-                "[JOIN CHECK ERROR]",
+                "[JOIN ERROR]",
                 repr(e),
             )
 
@@ -386,7 +445,7 @@ async def is_user_joined(user_id, retries=3):
 
     return (
         False,
-        "Unable to verify channel membership",
+        last_error or "Unable to verify membership",
     )
 
 
@@ -415,12 +474,18 @@ def join_keyboard():
 
 
 # =========================================================
-# WELCOME
+# WELCOME TEXT
 # =========================================================
 
-def welcome_text(user, verified=False):
+def welcome_text(
+    user,
+    verified=False,
+):
 
-    name = user.first_name or "User"
+    name = (
+        user.first_name
+        or "User"
+    )
 
     if verified:
 
@@ -443,6 +508,68 @@ def welcome_text(user, verified=False):
 
 
 # =========================================================
+# SEND START MESSAGE
+# =========================================================
+
+async def send_start_message(
+    message,
+    user,
+    joined,
+):
+
+    text = welcome_text(
+        user,
+        joined,
+    )
+
+    markup = (
+        None
+        if joined
+        else join_keyboard()
+    )
+
+    try:
+
+        async for photo in app.get_chat_photos(
+            user.id,
+            limit=1,
+        ):
+
+            await message.reply_photo(
+                photo.file_id,
+                caption=text,
+                reply_markup=markup,
+            )
+
+            return
+
+    except FloodWait as e:
+
+        wait = int(e.value)
+
+        print(
+            "[START PHOTO FLOODWAIT]",
+            wait,
+        )
+
+        await asyncio.sleep(
+            wait + 1
+        )
+
+    except Exception as e:
+
+        print(
+            "[START PHOTO ERROR]",
+            repr(e),
+        )
+
+    await message.reply_text(
+        text,
+        reply_markup=markup,
+    )
+
+
+# =========================================================
 # START
 # =========================================================
 
@@ -450,7 +577,10 @@ def welcome_text(user, verified=False):
     filters.command("start")
     & filters.private
 )
-async def start_handler(client, message):
+async def start_handler(
+    client,
+    message,
+):
 
     user = message.from_user
 
@@ -467,65 +597,16 @@ async def start_handler(client, message):
 
         await message.reply_text(
             "⚠️ Channel verification error.\n\n"
-            "Please try again later."
+            "Please try again."
         )
 
         return
 
-    text = welcome_text(
+    await send_start_message(
+        message,
         user,
         joined,
     )
-
-    try:
-
-        photos = []
-
-        async for photo in app.get_chat_photos(
-            user.id,
-            limit=1,
-        ):
-
-            photos.append(photo)
-
-        if photos:
-
-            await message.reply_photo(
-                photos[0].file_id,
-                caption=text,
-                reply_markup=(
-                    None
-                    if joined
-                    else join_keyboard()
-                ),
-            )
-
-        else:
-
-            await message.reply_text(
-                text,
-                reply_markup=(
-                    None
-                    if joined
-                    else join_keyboard()
-                ),
-            )
-
-    except Exception as e:
-
-        print(
-            "[START PHOTO ERROR]",
-            repr(e),
-        )
-
-        await message.reply_text(
-            text,
-            reply_markup=(
-                None
-                if joined
-                else join_keyboard()
-            ),
-        )
 
 
 # =========================================================
@@ -545,16 +626,23 @@ async def joined_callback(
     if not user:
         return
 
-    # Answer callback quickly
-    try:
-        await callback_query.answer()
-    except Exception:
-        pass
-
     add_user(user)
 
     # -----------------------------------------------------
-    # ADMIN
+    # Tell Telegram callback is being processed
+    # -----------------------------------------------------
+
+    try:
+
+        await callback_query.answer(
+            "🔍 Checking membership..."
+        )
+
+    except Exception:
+        pass
+
+    # -----------------------------------------------------
+    # Admin
     # -----------------------------------------------------
 
     if user.id == ADMIN_ID:
@@ -564,9 +652,8 @@ async def joined_callback(
 
     else:
 
-        # Small delay helps when user just joined
-        # and Telegram membership state has not
-        # propagated immediately.
+        # Telegram membership update can take
+        # a short moment after joining.
         await asyncio.sleep(1)
 
         joined, error = await is_user_joined(
@@ -575,16 +662,18 @@ async def joined_callback(
         )
 
     # -----------------------------------------------------
-    # VERIFICATION ERROR
+    # ERROR
     # -----------------------------------------------------
 
     if error:
 
         try:
+
             await callback_query.answer(
-                "⚠️ Verification error. Please try again.",
+                "⚠️ Verification failed. Try again.",
                 show_alert=True,
             )
+
         except Exception:
             pass
 
@@ -597,24 +686,28 @@ async def joined_callback(
     if not joined:
 
         try:
+
             await callback_query.answer(
                 "🚫 Pehle channel join karo!",
                 show_alert=True,
             )
+
         except Exception:
             pass
 
         return
 
     # -----------------------------------------------------
-    # SUCCESS
+    # VERIFIED
     # -----------------------------------------------------
 
     try:
+
         await callback_query.answer(
             "🎉 Congratulations! You are Joined.",
             show_alert=True,
         )
+
     except Exception:
         pass
 
@@ -625,16 +718,22 @@ async def joined_callback(
 
     try:
 
-        if callback_query.message.photo:
+        msg = callback_query.message
 
-            await callback_query.message.edit_caption(
+        if not msg:
+            return
+
+        # Photo message
+        if msg.photo:
+
+            await msg.edit_caption(
                 caption=text,
                 reply_markup=None,
             )
 
         else:
 
-            await callback_query.message.edit_text(
+            await msg.edit_text(
                 text,
                 reply_markup=None,
             )
@@ -646,9 +745,24 @@ async def joined_callback(
             repr(e),
         )
 
+        # Fallback
+        try:
+
+            await app.send_message(
+                user.id,
+                text,
+            )
+
+        except Exception as fallback_error:
+
+            print(
+                "[JOIN FALLBACK ERROR]",
+                repr(fallback_error),
+            )
+
 
 # =========================================================
-# URL
+# URL VALIDATION
 # =========================================================
 
 def valid_url(text):
@@ -665,7 +779,7 @@ def valid_url(text):
 
 
 # =========================================================
-# FIND VIDEO
+# FIND VIDEO URL
 # =========================================================
 
 def find_video_url(data):
@@ -710,7 +824,9 @@ def find_video_url(data):
 
         for value in data.values():
 
-            result = find_video_url(value)
+            result = find_video_url(
+                value
+            )
 
             if result:
                 return result
@@ -719,7 +835,9 @@ def find_video_url(data):
 
         for item in data:
 
-            result = find_video_url(item)
+            result = find_video_url(
+                item
+            )
 
             if result:
                 return result
@@ -728,22 +846,24 @@ def find_video_url(data):
 
 
 # =========================================================
-# API
+# DOWNLOADER API
 # =========================================================
 
 def call_api(url):
 
-    # Supports an API ending with:
-    # ?url=
-    # or simply an endpoint expecting the URL appended.
+    # API format:
+    # https://.../api/downloder?key=ansh&url=
 
-    endpoint = DOWNLOADER_API + quote(
-        url,
-        safe=":/?=&",
+    endpoint = (
+        DOWNLOADER_API
+        + quote(
+            url,
+            safe="",
+        )
     )
 
     print(
-        "[API]",
+        "[API REQUEST]",
         endpoint,
     )
 
@@ -771,6 +891,7 @@ def call_api(url):
                 "https://",
             )
         ):
+
             return text
 
         raise RuntimeError(
@@ -779,13 +900,18 @@ def call_api(url):
 
 
 # =========================================================
-# DOWNLOAD
+# DOWNLOAD FILE
 # =========================================================
 
 def download_file(
     video_url,
     path,
 ):
+
+    print(
+        "[DOWNLOAD]",
+        video_url,
+    )
 
     with requests.get(
         video_url,
@@ -854,7 +980,8 @@ async def video_handler(
         if error:
 
             await message.reply_text(
-                "⚠️ Channel verification failed."
+                "⚠️ Channel verification failed.\n\n"
+                "Please try again."
             )
 
             return
@@ -868,6 +995,10 @@ async def video_handler(
 
             return
 
+    # -----------------------------------------------------
+    # URL
+    # -----------------------------------------------------
+
     url = message.text.strip()
 
     if not valid_url(url):
@@ -877,6 +1008,10 @@ async def video_handler(
         )
 
         return
+
+    # -----------------------------------------------------
+    # STATUS
+    # -----------------------------------------------------
 
     status = await message.reply_text(
         "⏳ <b>Searching Database...</b>\n\n"
@@ -889,7 +1024,9 @@ async def video_handler(
         )
     )
 
-    video_path = temp_dir / "video.mp4"
+    video_path = (
+        temp_dir / "video.mp4"
+    )
 
     try:
 
@@ -899,6 +1036,7 @@ async def video_handler(
             "🔎 Searching records..."
         )
 
+        # API call in background thread
         api_data = await asyncio.to_thread(
             call_api,
             url,
@@ -931,6 +1069,10 @@ async def video_handler(
 
             return
 
+        # -------------------------------------------------
+        # DOWNLOAD
+        # -------------------------------------------------
+
         await status.edit_text(
             "⏳ <b>Downloading...</b>\n\n"
             "📥 Video download ho raha hai...\n"
@@ -952,6 +1094,10 @@ async def video_handler(
                 "Downloaded file empty"
             )
 
+        # -------------------------------------------------
+        # UPLOAD
+        # -------------------------------------------------
+
         await status.edit_text(
             "📤 <b>Uploading Video...</b>\n\n"
             "⚡ Please wait..."
@@ -968,6 +1114,10 @@ async def video_handler(
 
             try:
 
+                print(
+                    f"[UPLOAD] Attempt {attempt + 1}/4"
+                )
+
                 await message.reply_video(
                     video=str(video_path),
                     caption=caption,
@@ -979,8 +1129,14 @@ async def video_handler(
 
             except FloodWait as e:
 
+                wait = int(e.value)
+
+                print(
+                    f"[UPLOAD FLOODWAIT] {wait}s"
+                )
+
                 await asyncio.sleep(
-                    int(e.value)
+                    wait + 1
                 )
 
             except Exception as e:
@@ -994,7 +1150,10 @@ async def video_handler(
 
         if uploaded:
 
-            await status.delete()
+            try:
+                await status.delete()
+            except Exception:
+                pass
 
         else:
 
@@ -1097,7 +1256,9 @@ async def user_command(
 
         if len(text) + len(item) > 3800:
 
-            await message.reply_text(text)
+            await message.reply_text(
+                text
+            )
 
             text = ""
 
@@ -1105,11 +1266,13 @@ async def user_command(
 
     if text:
 
-        await message.reply_text(text)
+        await message.reply_text(
+            text
+        )
 
 
 # =========================================================
-# BROADCAST
+# BROADCAST SEND
 # =========================================================
 
 async def send_broadcast(
@@ -1128,8 +1291,14 @@ async def send_broadcast(
 
     except FloodWait as e:
 
+        wait = int(e.value)
+
+        print(
+            f"[BROADCAST FLOODWAIT] {wait}s"
+        )
+
         await asyncio.sleep(
-            int(e.value)
+            wait + 1
         )
 
         try:
@@ -1141,7 +1310,13 @@ async def send_broadcast(
 
             return "sent"
 
-        except Exception:
+        except Exception as e:
+
+            print(
+                "[BROADCAST RETRY ERROR]",
+                user_id,
+                repr(e),
+            )
 
             return "failed"
 
@@ -1162,6 +1337,10 @@ async def send_broadcast(
 
         return "failed"
 
+
+# =========================================================
+# /BROADCAST
+# =========================================================
 
 @app.on_message(
     filters.command("broadcast")
@@ -1198,7 +1377,10 @@ async def broadcast_command(
 
         return
 
-    # Personal
+    # -----------------------------------------------------
+    # PERSONAL MESSAGE
+    # -----------------------------------------------------
+
     if (
         len(parts) == 3
         and parts[1].lstrip("-").isdigit()
@@ -1220,7 +1402,10 @@ async def broadcast_command(
 
         return
 
-    # All users
+    # -----------------------------------------------------
+    # ALL USERS
+    # -----------------------------------------------------
+
     text = message.text[
         len("/broadcast"):
     ].strip()
@@ -1245,6 +1430,7 @@ async def broadcast_command(
     for uid in list(USERS.keys()):
 
         try:
+
             user_id = int(uid)
 
         except Exception:
@@ -1264,13 +1450,19 @@ async def broadcast_command(
         elif result == "blocked":
 
             blocked += 1
-            USERS.pop(uid, None)
+
+            USERS.pop(
+                uid,
+                None,
+            )
 
         else:
 
             failed += 1
 
-        await asyncio.sleep(0.08)
+        await asyncio.sleep(
+            0.08
+        )
 
     save_users()
 
@@ -1307,7 +1499,7 @@ async def add_command(
         return
 
     # -----------------------------------------------------
-    # REPLY TO ANY MESSAGE
+    # REPLY MESSAGE -> COPY TO CHANNEL
     # -----------------------------------------------------
 
     if message.reply_to_message:
@@ -1325,6 +1517,37 @@ async def add_command(
             await message.reply_text(
                 "✅ Message channel me add ho gaya."
             )
+
+        except FloodWait as e:
+
+            wait = int(e.value)
+
+            await asyncio.sleep(
+                wait + 1
+            )
+
+            try:
+
+                await app.copy_message(
+                    chat_id=CHANNEL_TARGET,
+                    from_chat_id=source.chat.id,
+                    message_id=source.id,
+                )
+
+                await message.reply_text(
+                    "✅ Message channel me add ho gaya."
+                )
+
+            except Exception as e2:
+
+                print(
+                    "[ADD RETRY ERROR]",
+                    repr(e2),
+                )
+
+                await message.reply_text(
+                    "❌ Channel me message add nahi hua."
+                )
 
         except Exception as e:
 
@@ -1375,6 +1598,36 @@ async def add_command(
             "✅ Text channel me add ho gaya."
         )
 
+    except FloodWait as e:
+
+        wait = int(e.value)
+
+        await asyncio.sleep(
+            wait + 1
+        )
+
+        try:
+
+            await app.send_message(
+                CHANNEL_TARGET,
+                text,
+            )
+
+            await message.reply_text(
+                "✅ Text channel me add ho gaya."
+            )
+
+        except Exception as e2:
+
+            print(
+                "[ADD TEXT RETRY ERROR]",
+                repr(e2),
+            )
+
+            await message.reply_text(
+                "❌ Text send nahi hua."
+            )
+
     except Exception as e:
 
         print(
@@ -1388,87 +1641,90 @@ async def add_command(
 
 
 # =========================================================
+# STARTUP WITH FLOODWAIT PROTECTION
+# =========================================================
+
+def start_bot():
+
+    while True:
+
+        try:
+
+            print("=" * 60)
+            print("🚀 STARTING TELEGRAM BOT")
+            print("=" * 60)
+            print("⏳ Connecting to Telegram...")
+
+            # -------------------------------------------------
+            # Pyrogram manages its own event loop.
+            # -------------------------------------------------
+
+            app.run()
+
+            print(
+                "✅ Telegram client stopped normally."
+            )
+
+            break
+
+        except FloodWait as e:
+
+            wait = int(e.value)
+
+            print("=" * 60)
+            print("⚠️ TELEGRAM FLOOD_WAIT")
+            print(
+                f"⏳ Telegram requested {wait} seconds."
+            )
+            print(
+                "🔄 Automatically retrying..."
+            )
+            print("=" * 60)
+
+            time.sleep(
+                wait + 3
+            )
+
+        except KeyboardInterrupt:
+
+            print(
+                "🛑 Bot stopped manually."
+            )
+
+            break
+
+        except Exception as e:
+
+            print("=" * 60)
+            print(
+                "❌ TELEGRAM START ERROR"
+            )
+            print(
+                repr(e)
+            )
+            print(
+                "🔄 Retrying after 10 seconds..."
+            )
+            print("=" * 60)
+
+            time.sleep(10)
+
+
+# =========================================================
 # MAIN
-# =========================================================
-
-def main():
-
-    print("=" * 60)
-    print("🚀 STARTING MISSTU VIDEO BOT")
-    print("=" * 60)
-
-    print("API_ID:", API_ID)
-    print("ADMIN_ID:", ADMIN_ID)
-    print("CHANNEL_ID:", CHANNEL_TARGET)
-    print("CHANNEL_URL:", CHANNEL_URL)
-    print("=" * 60)
-
-    # Flask health server
-    threading.Thread(
-        target=run_web_server,
-        daemon=True,
-    ).start()
-
-    print("✅ Health server started")
-
-    try:
-
-        # -------------------------------------------------
-        # Pyrogram canonical lifecycle
-        # -------------------------------------------------
-
-        print("⏳ Starting Telegram client...")
-
-        app.run(
-            main()
-            if False
-            else None
-        )
-
-    except KeyboardInterrupt:
-
-        print("Stopping bot...")
-
-    except Exception as e:
-
-        print(
-            "❌ BOT START ERROR:",
-            repr(e),
-        )
-
-        raise
-
-
-# =========================================================
-# CORRECT START
 # =========================================================
 
 if __name__ == "__main__":
 
+    # Start Render health server
     threading.Thread(
         target=run_web_server,
         daemon=True,
     ).start()
 
-    print("=" * 60)
-    print("🚀 STARTING TELEGRAM BOT")
-    print("=" * 60)
+    print(
+        "✅ Flask health server started"
+    )
 
-    try:
-
-        print("⏳ Connecting to Telegram...")
-
-        # Pyrogram handles its own event loop.
-        app.run()
-
-    except KeyboardInterrupt:
-
-        print("🛑 Bot stopped.")
-
-    except Exception as e:
-
-        print(
-            "❌ FATAL BOT ERROR:",
-            repr(e),
-        )
-        raise
+    # Telegram
+    start_bot()
