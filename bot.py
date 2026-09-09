@@ -88,7 +88,11 @@ def load_users():
             return set(int(x) for x in data)
 
     except Exception as e:
-        print("❌ User database read error:", repr(e), flush=True)
+        print(
+            "❌ User database read error:",
+            repr(e),
+            flush=True
+        )
 
     return set()
 
@@ -188,6 +192,14 @@ def join_keyboard():
 
 # ============================================================
 # CHANNEL MEMBERSHIP CHECK
+#
+# IMPORTANT:
+# Pyrogram get_chat_member ko yahan use nahi kiya gaya.
+# Telegram Bot API getChatMember use ho raha hai.
+#
+# Isse:
+# ValueError: Peer id invalid
+# wali Pyrogram problem avoid hoti hai.
 # ============================================================
 
 async def is_user_joined(user_id, retries=3):
@@ -196,87 +208,153 @@ async def is_user_joined(user_id, retries=3):
     if user_id == ADMIN_ID:
         return True, None
 
+    api_url = (
+        f"https://api.telegram.org/bot{BOT_TOKEN}/getChatMember"
+    )
+
+    params = {
+        "chat_id": str(CHANNEL_ID),
+        "user_id": str(user_id),
+    }
+
     for attempt in range(1, retries + 1):
 
         try:
-            member = await app.get_chat_member(
-                chat_id=CHANNEL_ID,
-                user_id=user_id
+
+            def check_membership():
+
+                response = requests.get(
+                    api_url,
+                    params=params,
+                    timeout=20
+                )
+
+                return response
+
+            response = await asyncio.to_thread(
+                check_membership
             )
 
-            status = getattr(member, "status", "")
+            # HTTP error
+            response.raise_for_status()
 
-            if hasattr(status, "value"):
-                status = status.value
-
-            status = str(status).lower().strip()
+            try:
+                data = response.json()
+            except Exception as e:
+                raise RuntimeError(
+                    "Telegram Bot API ne valid JSON response nahi diya."
+                ) from e
 
             print(
-                f"🔍 Membership check | User: {user_id} | Status: {status}",
+                "🔍 Telegram membership response:",
+                data,
                 flush=True
             )
 
+            # Telegram API unsuccessful
+            if not data.get("ok"):
+
+                description = data.get(
+                    "description",
+                    "Unknown Telegram API error"
+                )
+
+                error_code = data.get(
+                    "error_code",
+                    "unknown"
+                )
+
+                lower_description = str(
+                    description
+                ).lower()
+
+                # User channel member nahi hai
+                if (
+                    "user not found" in lower_description
+                    or
+                    "user_not_participant" in lower_description
+                    or
+                    "member list is inaccessible" in lower_description
+                ):
+                    return False, None
+
+                return (
+                    False,
+                    f"Telegram membership check failed "
+                    f"({error_code}): {description}"
+                )
+
+            result = data.get("result")
+
+            if not isinstance(result, dict):
+
+                return (
+                    False,
+                    "Telegram membership response invalid."
+                )
+
+            status = str(
+                result.get("status", "")
+            ).lower().strip()
+
+            print(
+                f"🔍 Membership check | "
+                f"User: {user_id} | "
+                f"Status: {status}",
+                flush=True
+            )
+
+            # Valid members
             if status in (
                 "member",
                 "administrator",
-                "admin",
-                "owner",
                 "creator",
             ):
                 return True, None
 
+            # Restricted user
             if status == "restricted":
-                is_member = getattr(
-                    member,
-                    "is_member",
-                    False
+
+                is_member = bool(
+                    result.get(
+                        "is_member",
+                        False
+                    )
                 )
 
-                return bool(is_member), None
+                return is_member, None
 
+            # Not joined
             if status in (
                 "left",
                 "kicked",
-                "banned",
             ):
                 return False, None
 
             return False, None
 
-        except FloodWait as e:
-
-            wait_time = int(
-                getattr(e, "value", 1)
-            )
+        except requests.RequestException as e:
 
             print(
-                f"⚠️ Membership FloodWait: {wait_time}s",
+                f"❌ [JOIN HTTP ERROR] "
+                f"Attempt {attempt}/{retries} | "
+                f"User {user_id} | "
+                f"{repr(e)}",
                 flush=True
             )
 
-            await asyncio.sleep(wait_time + 1)
+            if attempt < retries:
+                await asyncio.sleep(2)
 
         except Exception as e:
-
-            error_name = type(e).__name__
-            error_text = str(e)
 
             print(
                 f"❌ [JOIN ERROR] "
                 f"Attempt {attempt}/{retries} | "
                 f"User {user_id} | "
-                f"{error_name}: {error_text}",
+                f"{type(e).__name__}: {e}",
                 flush=True
             )
-
-            lower_error = error_text.lower()
-
-            if (
-                "user not participant" in lower_error
-                or "user_not_participant" in lower_error
-                or "participant_id_invalid" in lower_error
-            ):
-                return False, None
 
             if attempt < retries:
                 await asyncio.sleep(1)
@@ -284,7 +362,7 @@ async def is_user_joined(user_id, retries=3):
     return (
         False,
         "Channel membership verification failed. "
-        "Check bot admin permission and CHANNEL_ID."
+        "Check BOT_TOKEN, CHANNEL_ID and bot channel access."
     )
 
 
@@ -595,7 +673,6 @@ async def start_handler(
             "<b>Joined</b> button press karo."
         )
 
-        # User ka Telegram profile DP
         photo = await get_user_photo(
             user.id
         )
@@ -769,9 +846,20 @@ async def check_join_callback(
 
     try:
 
-        await callback_query.message.edit_text(
-            welcome
-        )
+        # Photo message ke liye caption edit
+        if callback_query.message.photo:
+
+            await callback_query.message.edit_caption(
+                caption=welcome,
+                reply_markup=None
+            )
+
+        else:
+
+            await callback_query.message.edit_text(
+                welcome,
+                reply_markup=None
+            )
 
     except Exception as e:
 
@@ -780,6 +868,21 @@ async def check_join_callback(
             repr(e),
             flush=True
         )
+
+        # Agar edit fail ho to naya welcome message
+        try:
+
+            await callback_query.message.reply_text(
+                welcome
+            )
+
+        except Exception as reply_error:
+
+            print(
+                "Joined fallback reply error:",
+                repr(reply_error),
+                flush=True
+            )
 
 
 # ============================================================
@@ -1017,7 +1120,6 @@ async def broadcast_handler(
                 )
 
 
-        # Update progress every 10 users
         if (
             (sent + failed) % 10 == 0
         ):
