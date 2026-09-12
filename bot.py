@@ -737,15 +737,14 @@ async def start_handler(
 
     # --------------------------------------------------------
     # Already joined
-    #
-    # Open Channel button added here.
-    # --------------------------------------------------------
+   
 
     welcome = (
         f"👋 <b>Welcome {name}!</b>\n\n"
         "🎬 <b>Alexa Video Downloader</b>\n\n"
-        "📥 Mujhe kisi supported video ka link bhejo.\n"
+        "📥 Open Channel Pe Click Karke Video Ka link Past Karo.\n"
         "Main uska video download karke yahin bhej dunga.\n\n"
+        "Only 18+ Allowed.🔞💦\n\n"
         "⚡ <b>Fast • Simple • Easy</b>"
     )
 
@@ -863,8 +862,9 @@ async def check_join_callback(
     welcome = (
         f"👋 <b>Welcome {name}!</b>\n\n"
         "🎬 <b>Alexa Video Downloader</b>\n\n"
-        "📥 Mujhe kisi supported video ka link bhejo.\n"
+        "📥 Open Channel Pe Click Karke Video Ka link Past Karo.\n"
         "Main uska video download karke yahin bhej dunga.\n\n"
+        "Only 18+ Allowed.🔞💦\n\n"
         "⚡ <b>Fast • Simple • Easy</b>"
     )
 
