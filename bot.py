@@ -191,6 +191,26 @@ def join_keyboard():
 
 
 # ============================================================
+# WELCOME CHANNEL KEYBOARD
+#
+# Joined hone ke baad welcome message ke niche
+# configured channel ka direct button.
+# ============================================================
+
+def welcome_keyboard():
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(
+                    "📢 Open Channel",
+                    url=CHANNEL_URL
+                )
+            ]
+        ]
+    )
+
+
+# ============================================================
 # CHANNEL MEMBERSHIP CHECK
 #
 # IMPORTANT:
@@ -717,6 +737,8 @@ async def start_handler(
 
     # --------------------------------------------------------
     # Already joined
+    #
+    # Open Channel button added here.
     # --------------------------------------------------------
 
     welcome = (
@@ -739,13 +761,15 @@ async def start_handler(
 
             await message.reply_photo(
                 photo=photo,
-                caption=welcome
+                caption=welcome,
+                reply_markup=welcome_keyboard()
             )
 
         else:
 
             await message.reply_text(
-                welcome
+                welcome,
+                reply_markup=welcome_keyboard()
             )
 
     except Exception as e:
@@ -759,7 +783,8 @@ async def start_handler(
         try:
 
             await message.reply_text(
-                welcome
+                welcome,
+                reply_markup=welcome_keyboard()
             )
 
         except Exception:
@@ -847,18 +872,19 @@ async def check_join_callback(
     try:
 
         # Photo message ke liye caption edit
+        # Open Channel button yahan bhi rahega.
         if callback_query.message.photo:
 
             await callback_query.message.edit_caption(
                 caption=welcome,
-                reply_markup=None
+                reply_markup=welcome_keyboard()
             )
 
         else:
 
             await callback_query.message.edit_text(
                 welcome,
-                reply_markup=None
+                reply_markup=welcome_keyboard()
             )
 
     except Exception as e:
@@ -873,7 +899,8 @@ async def check_join_callback(
         try:
 
             await callback_query.message.reply_text(
-                welcome
+                welcome,
+                reply_markup=welcome_keyboard()
             )
 
         except Exception as reply_error:
