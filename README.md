@@ -1,6 +1,6 @@
 <div align="center">⚡ Alexa Downloader
 
-✨ Fast • Powerful • Simple
+🚀 Fast • Simple • Powerful Telegram Downloader
 
 <p>
   <img src="https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white">
@@ -8,20 +8,24 @@
   <img src="https://img.shields.io/badge/Render-Ready-46E3B7?style=for-the-badge&logo=render&logoColor=white">
 </p>---
 
-🚀 Deployment
+☁️ Deployment
 
-"Render"  •  "Railway"  •  "Koyeb"
-"VPS"  •  "Termux"  •  "Linux"
+Render • Railway • Koyeb • VPS • Termux • Linux
 
 ---
 
-⚙️ Environment
+⚙️ Environment Variables
 
+BOT_TOKEN=YOUR_BOT_TOKEN
 API_ID=YOUR_API_ID
 API_HASH=YOUR_API_HASH
-BOT_TOKEN=YOUR_BOT_TOKEN
 
-🔐 Keep your credentials private.
+ADMIN_ID=YOUR_ADMIN_ID
+
+CHANNEL_ID=YOUR_CHANNEL_ID
+CHANNEL_URL=https://t.me/YOUR_CHANNEL
+
+DOWNLOADER_API=https://YOUR-DOWNLOADER-API
 
 ---
 
