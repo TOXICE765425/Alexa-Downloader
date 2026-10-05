@@ -1,24 +1,27 @@
 <div align="center">⚡ Alexa Downloader
 
+✨ Fast • Powerful • Simple
+
 <p>
   <img src="https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white">
   <img src="https://img.shields.io/badge/Pyrogram-2.x-00AEEF?style=for-the-badge">
   <img src="https://img.shields.io/badge/Render-Ready-46E3B7?style=for-the-badge&logo=render&logoColor=white">
-</p>🚀 Telegram Downloader Bot
+</p>---
 
-Deploy Anywhere
+🚀 Deployment
 
-"Render" • "Railway" • "Koyeb" • "VPS" • "Termux"
+"Render"  •  "Railway"  •  "Koyeb"
+"VPS"  •  "Termux"  •  "Linux"
 
 ---
 
 ⚙️ Environment
 
-API_ID=
-API_HASH=
-BOT_TOKEN=
+API_ID=YOUR_API_ID
+API_HASH=YOUR_API_HASH
+BOT_TOKEN=YOUR_BOT_TOKEN
 
-«Add your required environment variables before starting the bot.»
+🔐 Keep your credentials private.
 
 ---
 
@@ -26,6 +29,12 @@ BOT_TOKEN=
 
 Toxice Hacker
 
-"GitHub" (https://github.com/TOXICE765425)
+<p>
+  <a href="https://github.com/TOXICE765425">
+    <img src="https://img.shields.io/badge/GitHub-TOXICE765425-black?style=for-the-badge&logo=github">
+  </a>
+</p>---
+
+⭐ Star the repository if you like it!
 
 </div>
